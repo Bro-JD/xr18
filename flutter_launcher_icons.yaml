@@ -1,0 +1,5 @@
+flutter_icons:
+  android: true
+  ios: false  # Set to false since you're not targeting iOS in your case
+  image_path: "assets/app_icon.png"  # Path to your app icon image (must be 512x512)
+
