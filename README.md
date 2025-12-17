@@ -4,10 +4,6 @@ A new Flutter project.
 
 ## Getting Started
 
-| Item                                | Required?         | Why                            |
-| ----------------------------------- | ----------------- | ------------------------------ |
-| Android “INTERNET” permission       | ✅                 | Without it, UDP fails silently |
-| Multicast allowed                   | 👍                | XR18 discovery uses it         |
-| OSC packets in proper binary format | **MUST**          | Text messages are ignored      |
-| Correct port                        | Usually **10024** | 10025 only in Edit mode        |
-| Path formatting                     | MUST              | `/bus/1/mix/fader` etc         |
+You have to send /xremote every 8 seconds for keep alive. Other wise XR18 will not reply it seems.
+
+Added "xr18_mixer.py" to mimic XR18 mixer!
