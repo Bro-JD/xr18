@@ -118,6 +118,18 @@ enum MixTarget { lr, aux1, aux2, aux3, aux4 }
 
 enum ConnStatus { idle, discovering, connected, failed }
 
+/// What the XR18's USB outputs carry, as read back from the mixer.
+enum UsbMode { unknown, individual, mainMix, custom }
+
+// /routing/usb/NN = [source, tap]. Sources (XR18 fw 1.26): 0-15 Ch01-16,
+// 16-17 Aux in L/R, 18-25 FX 1-4 L/R, 26-31 Bus 1-6, 32-35 Send 1-4, 36-37 Main L/R.
+// Taps: 0 AIN, 1 IN, 2 PREEQ, 3 POSTEQ, 4 PRE, 5 POST.
+const _usbOutputs = 18;
+const _usbSrcMainL = 36;
+const _usbSrcMainR = 37;
+const _usbTapAnalogIn = 0;
+const _usbTapPost = 5;
+
 final _mixCount = MixTarget.values.length;
 
 class XR18ControlPage extends StatefulWidget {
@@ -156,6 +168,20 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
   final _meters =
       ValueNotifier<List<double>>(List.filled(_meterCount, _meterFloor));
 
+  /// USB output routing as reported by the mixer (null = not reported yet).
+  final List<int?> _usbSrc = List.filled(_usbOutputs, null);
+  final List<int?> _usbTap = List.filled(_usbOutputs, null);
+  bool _usbApplying = false;
+
+  /// Bumped on every setState so the open Settings sheet shows live state.
+  final _uiTick = ValueNotifier<int>(0);
+
+  @override
+  void setState(VoidCallback fn) {
+    super.setState(fn);
+    _uiTick.value++;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -182,6 +208,18 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
     final d = ByteData(4)..setInt32(0, v, Endian.big);
     return Uint8List.fromList(
         [..._oscStr(addr), ..._oscStr(',i'), ...d.buffer.asUint8List()]);
+  }
+
+  Uint8List _oscInts(String addr, List<int> values) {
+    final d = ByteData(4 * values.length);
+    for (int i = 0; i < values.length; i++) {
+      d.setInt32(i * 4, values[i], Endian.big);
+    }
+    return Uint8List.fromList([
+      ..._oscStr(addr),
+      ..._oscStr(',${'i' * values.length}'),
+      ...d.buffer.asUint8List(),
+    ]);
   }
 
   Uint8List _oscStrArg(String addr, String v) =>
@@ -337,8 +375,12 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
         '${_busBase(m.index)}/config/name',
       ],
       for (int g = 1; g <= 4; g++) '/config/mute/$g',
+      ..._usbQueries,
     ]);
   }
+
+  List<String> get _usbQueries =>
+      [for (int n = 1; n <= _usbOutputs; n++) '/routing/usb/${_two(n)}'];
 
   /* ─── Incoming OSC ─── */
 
@@ -386,6 +428,8 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
     if (!mounted || args.isEmpty) return;
     if (address == '/meters/1') {
       _onMeters(args.first);
+    } else if (address.startsWith('/routing/usb/')) {
+      _onUsbRouting(address, args);
     } else {
       _updateFromOsc(address, args.first);
     }
@@ -413,6 +457,67 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
   static final _reSend = RegExp(r'^mix/(\d{2})/level$');
   static final _reBus = RegExp(r'^/(?:bus/0?(\d)|lr)/(.+)$');
   static final _reMuteGroup = RegExp(r'^/config/mute/(\d)$');
+  static final _reUsb = RegExp(r'^/routing/usb/(\d{2})(/src)?$');
+
+  /// `/routing/usb/NN` answers [source, tap]; `/routing/usb/NN/src` just the source.
+  void _onUsbRouting(String path, List<Object> args) {
+    final m = _reUsb.firstMatch(path);
+    if (m == null || args.first is! num) return;
+    final i = int.parse(m.group(1)!) - 1;
+    if (i < 0 || i >= _usbOutputs) return;
+    setState(() {
+      _usbSrc[i] = (args.first as num).toInt();
+      if (m.group(2) == null && args.length > 1 && args[1] is num) {
+        _usbTap[i] = (args[1] as num).toInt();
+      }
+    });
+  }
+
+  UsbMode get _usbMode {
+    if (_usbSrc[0] == null || _usbSrc[1] == null) return UsbMode.unknown;
+    if (_usbSrc[0] == _usbSrcMainL && _usbSrc[1] == _usbSrcMainR) {
+      return UsbMode.mainMix;
+    }
+    for (int i = 0; i < 16; i++) {
+      final s = _usbSrc[i];
+      if (s != null && s != i) return UsbMode.custom;
+    }
+    return UsbMode.individual;
+  }
+
+  /// Individual: all 18 USB outputs back to the XR18 default (USB n = Ch n,
+  /// 17-18 = Aux in), keeping each output's tap unless it came from main mode.
+  /// Main mix: only USB 1-2 change, to Main L/R post-fader.
+  Future<void> _setUsbMode(UsbMode mode) async {
+    if (_connStatus != ConnStatus.connected || _usbApplying) return;
+    setState(() => _usbApplying = true);
+
+    final outputs = mode == UsbMode.mainMix ? 2 : _usbOutputs;
+    for (int i = 0; i < outputs; i++) {
+      int src;
+      int tap;
+      if (mode == UsbMode.mainMix) {
+        src = i == 0 ? _usbSrcMainL : _usbSrcMainR;
+        tap = _usbTapPost;
+      } else {
+        final wasMain =
+            _usbSrc[i] == _usbSrcMainL || _usbSrc[i] == _usbSrcMainR;
+        src = i;
+        tap = (wasMain ? null : _usbTap[i]) ?? _usbTapAnalogIn;
+      }
+      final addr = '/routing/usb/${_two(i + 1)}';
+      _send(_oscInts(addr, [src, tap]));
+      _sendInt(
+          '$addr/src', src); // leaf form, for firmware that only takes that
+      if (i % 4 == 3) await Future.delayed(const Duration(milliseconds: 5));
+    }
+
+    // Read back what the mixer actually did, so the UI shows its real state.
+    await Future.delayed(const Duration(milliseconds: 300));
+    await _sendBurst(_usbQueries);
+    await Future.delayed(const Duration(milliseconds: 400));
+    if (mounted) setState(() => _usbApplying = false);
+  }
 
   void _updateFromOsc(String path, Object arg) {
     final v = arg is num ? arg.toDouble() : null;
@@ -756,39 +861,175 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
     });
   }
 
+  /// Draggable Settings sheet: opens at 75 % height, drag up to expand, down to close.
   void _openConnectionSheet() {
+    if (_connStatus == ConnStatus.connected) _sendBurst(_usbQueries);
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
       backgroundColor: _surface,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (ctx) => SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(
-            16, 16, 16, 16 + MediaQuery.of(ctx).viewInsets.bottom),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              const Text('Settings',
-                  style: TextStyle(
-                      color: _textPri,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15)),
-              const Spacer(),
-              _statusDot(),
-              const SizedBox(width: 6),
-              Text(
-                _connStatus == ConnStatus.connected
-                    ? 'Connected · $_statusMsg'
-                    : _statusMsg,
-                style: TextStyle(color: _statusColor, fontSize: 12),
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.75,
+        minChildSize: 0.4,
+        maxChildSize: 0.95,
+        builder: (ctx, scroll) => ValueListenableBuilder<int>(
+          valueListenable: _uiTick,
+          builder: (ctx, _, __) {
+            final mq = MediaQuery.of(ctx);
+            return ListView(
+              controller: scroll,
+              // keep content clear of the Android nav bar and the keyboard
+              padding: EdgeInsets.fromLTRB(
+                  16, 0, 16, 24 + mq.padding.bottom + mq.viewInsets.bottom),
+              children: [
+                Row(children: [
+                  const Text('Settings',
+                      style: TextStyle(
+                          color: _textPri,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 17)),
+                  const Spacer(),
+                  _statusDot(),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      _connStatus == ConnStatus.connected
+                          ? 'Connected · $_statusMsg'
+                          : _statusMsg,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: _statusColor, fontSize: 12),
+                    ),
+                  ),
+                ]),
+                _settingsHeading('Connection'),
+                _buildConnectionForm(onDone: () => Navigator.pop(ctx)),
+                _settingsHeading('USB audio out (recording)'),
+                _buildUsbSection(),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _settingsHeading(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 22, bottom: 10),
+      child: Text(text,
+          style: const TextStyle(
+              color: _textSec,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.3)),
+    );
+  }
+
+  Widget _buildUsbSection() {
+    final connected = _connStatus == ConnStatus.connected;
+    String status;
+    switch (_usbMode) {
+      case UsbMode.unknown:
+        status = connected
+            ? "The mixer hasn't reported its USB routing yet."
+            : 'Connect to the mixer to change this.';
+        break;
+      case UsbMode.individual:
+        status = 'Mixer reports: individual channels.';
+        break;
+      case UsbMode.mainMix:
+        status = 'Mixer reports: main mix on USB 1–2.';
+        break;
+      case UsbMode.custom:
+        status = 'Mixer reports: custom routing (set elsewhere).';
+        break;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _usbOption(
+          UsbMode.individual,
+          Icons.view_week,
+          'Individual channels',
+          'USB 1–16 = channels 1–16, USB 17–18 = Aux in. '
+              'For multitrack recording.',
+        ),
+        const SizedBox(height: 8),
+        _usbOption(
+          UsbMode.mainMix,
+          Icons.speaker,
+          'Main mix',
+          'USB 1–2 = Main L/R, post-fader. For stereo recording.',
+        ),
+        const SizedBox(height: 10),
+        Row(children: [
+          if (_usbApplying) ...[
+            const SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(strokeWidth: 1.5)),
+            const SizedBox(width: 8),
+          ],
+          Expanded(
+            child: Text(_usbApplying ? 'Applying…' : status,
+                style: const TextStyle(color: _textSec, fontSize: 12)),
+          ),
+        ]),
+      ],
+    );
+  }
+
+  Widget _usbOption(UsbMode mode, IconData icon, String title, String desc) {
+    final selected = _usbMode == mode;
+    final enabled = _connStatus == ConnStatus.connected && !_usbApplying;
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Opacity(
+        opacity: enabled ? 1 : 0.5,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: enabled ? () => _setUsbMode(mode) : null,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: selected ? _accent.withValues(alpha: 0.10) : _bg,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: selected ? _accent : _border),
+            ),
+            child: Row(children: [
+              Icon(icon, size: 20, color: selected ? _accent : _textSec),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: const TextStyle(
+                            color: _textPri,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14)),
+                    const SizedBox(height: 2),
+                    Text(desc,
+                        style: const TextStyle(color: _textSec, fontSize: 12)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                selected ? Icons.radio_button_checked : Icons.radio_button_off,
+                size: 20,
+                color: selected ? _accent : _textSec,
               ),
             ]),
-            const SizedBox(height: 14),
-            _buildConnectionForm(onDone: () => Navigator.pop(ctx)),
-          ],
+          ),
         ),
       ),
     );
@@ -1015,6 +1256,7 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
     _socketSub?.cancel();
     _socket?.close();
     _meters.dispose();
+    _uiTick.dispose();
     _ipController.dispose();
     _portController.dispose();
     super.dispose();
