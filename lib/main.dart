@@ -10,23 +10,32 @@ import 'package:flutter/material.dart';
 void main() => runApp(const MyApp());
 
 // ────────── Design tokens ──────────
-const _bg        = Color(0xFF0D1117);
-const _surface   = Color(0xFF161B22);
+const _bg = Color(0xFF0D1117);
+const _surface = Color(0xFF161B22);
 const _surfaceHi = Color(0xFF21262D);
-const _border    = Color(0xFF30363D);
-const _accent    = Color(0xFF00D4FF);
-const _green     = Color(0xFF3FB950);
-const _red       = Color(0xFFF85149);
-const _amber     = Color(0xFFD29922);
-const _blue      = Color(0xFF58A6FF);
-const _magenta   = Color(0xFFDB61A2);
-const _textPri   = Color(0xFFE6EDF3);
-const _textSec   = Color(0xFF8B949E);
+const _border = Color(0xFF30363D);
+const _accent = Color(0xFF00D4FF);
+const _green = Color(0xFF3FB950);
+const _red = Color(0xFFF85149);
+const _amber = Color(0xFFD29922);
+const _blue = Color(0xFF58A6FF);
+const _magenta = Color(0xFFDB61A2);
+const _textPri = Color(0xFFE6EDF3);
+const _textSec = Color(0xFF8B949E);
 
 const _mono = TextStyle(fontFeatures: [FontFeature.tabularFigures()]);
 
 // XR18 scribble-strip colours (index % 8; 8–15 are the inverted variants)
-const _xairColors = [_border, _red, _green, _amber, _blue, _magenta, _accent, _textPri];
+const _xairColors = [
+  _border,
+  _red,
+  _green,
+  _amber,
+  _blue,
+  _magenta,
+  _accent,
+  _textPri
+];
 
 /// Fader position for 0 dB.
 const _unity = 0.75;
@@ -67,12 +76,14 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: _bg,
-        colorScheme: const ColorScheme.dark(primary: _accent, secondary: _green, surface: _surface),
+        colorScheme: const ColorScheme.dark(
+            primary: _accent, secondary: _green, surface: _surface),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             backgroundColor: _accent,
             foregroundColor: _bg,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             textStyle: const TextStyle(fontWeight: FontWeight.bold),
           ),
         ),
@@ -80,15 +91,18 @@ class MyApp extends StatelessWidget {
           style: OutlinedButton.styleFrom(
             foregroundColor: _accent,
             side: const BorderSide(color: _border),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
         ),
         inputDecorationTheme: const InputDecorationTheme(
           filled: true,
           fillColor: _bg,
           border: OutlineInputBorder(borderSide: BorderSide(color: _border)),
-          enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _border)),
-          focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: _accent)),
+          enabledBorder:
+              OutlineInputBorder(borderSide: BorderSide(color: _border)),
+          focusedBorder:
+              OutlineInputBorder(borderSide: BorderSide(color: _accent)),
           labelStyle: TextStyle(color: _textSec),
           isDense: true,
           contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -101,6 +115,7 @@ class MyApp extends StatelessWidget {
 
 /// index == bus number (0 = main L/R).
 enum MixTarget { lr, aux1, aux2, aux3, aux4 }
+
 enum ConnStatus { idle, discovering, connected, failed }
 
 final _mixCount = MixTarget.values.length;
@@ -113,31 +128,33 @@ class XR18ControlPage extends StatefulWidget {
 }
 
 class _XR18ControlPageState extends State<XR18ControlPage> {
-  final _ipController   = TextEditingController(text: '192.168.0.2');
+  final _ipController = TextEditingController(text: '192.168.0.2');
   final _portController = TextEditingController(text: '10024');
 
-  RawDatagramSocket?                  _socket;
-  Future<RawDatagramSocket>?          _socketFuture;
+  RawDatagramSocket? _socket;
+  Future<RawDatagramSocket>? _socketFuture;
   StreamSubscription<RawSocketEvent>? _socketSub;
-  Timer?                              _keepAliveTimer;
-  DateTime                            _lastMeterAt = DateTime.fromMillisecondsSinceEpoch(0);
+  Timer? _keepAliveTimer;
+  DateTime _lastMeterAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   ConnStatus _connStatus = ConnStatus.idle;
-  String     _statusMsg  = 'Not connected';
-  MixTarget  _selectedMix = MixTarget.lr;
+  String _statusMsg = 'Not connected';
+  MixTarget _selectedMix = MixTarget.lr;
 
   /// _levels[0][ch] = main fader, _levels[n][ch] = send level to aux n.
-  final List<List<double>> _levels = List.generate(_mixCount, (_) => List.filled(16, 0.0));
-  final List<double> _busFader     = List.filled(_mixCount, 0.0);
-  final List<bool>   _busMute      = List.filled(_mixCount, false);
-  final List<String> _busName      = List.filled(_mixCount, '');
-  final List<bool>   _channelMute  = List.filled(16, false);
-  final List<String> _channelName  = List.filled(16, '');
-  final List<int>    _channelColor = List.filled(16, 0);
-  final List<bool>   _muteGroup    = List.filled(4, false);
+  final List<List<double>> _levels =
+      List.generate(_mixCount, (_) => List.filled(16, 0.0));
+  final List<double> _busFader = List.filled(_mixCount, 0.0);
+  final List<bool> _busMute = List.filled(_mixCount, false);
+  final List<String> _busName = List.filled(_mixCount, '');
+  final List<bool> _channelMute = List.filled(16, false);
+  final List<String> _channelName = List.filled(16, '');
+  final List<int> _channelColor = List.filled(16, 0);
+  final List<bool> _muteGroup = List.filled(4, false);
 
   /// Meter levels in dB, updated ~20x/s without rebuilding the whole page.
-  final _meters = ValueNotifier<List<double>>(List.filled(_meterCount, _meterFloor));
+  final _meters =
+      ValueNotifier<List<double>>(List.filled(_meterCount, _meterFloor));
 
   @override
   void initState() {
@@ -157,12 +174,14 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
 
   Uint8List _oscFloat(String addr, double v) {
     final d = ByteData(4)..setFloat32(0, v, Endian.big);
-    return Uint8List.fromList([..._oscStr(addr), ..._oscStr(',f'), ...d.buffer.asUint8List()]);
+    return Uint8List.fromList(
+        [..._oscStr(addr), ..._oscStr(',f'), ...d.buffer.asUint8List()]);
   }
 
   Uint8List _oscInt(String addr, int v) {
     final d = ByteData(4)..setInt32(0, v, Endian.big);
-    return Uint8List.fromList([..._oscStr(addr), ..._oscStr(',i'), ...d.buffer.asUint8List()]);
+    return Uint8List.fromList(
+        [..._oscStr(addr), ..._oscStr(',i'), ...d.buffer.asUint8List()]);
   }
 
   Uint8List _oscStrArg(String addr, String v) =>
@@ -187,7 +206,7 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
   }
 
   void _sendFloat(String path, double value) => _send(_oscFloat(path, value));
-  void _sendInt(String path, int value)      => _send(_oscInt(path, value));
+  void _sendInt(String path, int value) => _send(_oscInt(path, value));
 
   /// Sends many queries with short pauses so the mixer doesn't drop packets.
   Future<void> _sendBurst(List<String> queries) async {
@@ -200,15 +219,16 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
   // XR18 (X-Air) bus/group indices are NOT zero-padded: /bus/1, /config/mute/1
   String _busBase(int bus) => bus == 0 ? '/lr' : '/bus/$bus';
 
-  String _levelPath(int bus, int ch) =>
-      bus == 0 ? '/ch/${_two(ch + 1)}/mix/fader' : '/ch/${_two(ch + 1)}/mix/${_two(bus)}/level';
+  String _levelPath(int bus, int ch) => bus == 0
+      ? '/ch/${_two(ch + 1)}/mix/fader'
+      : '/ch/${_two(ch + 1)}/mix/${_two(bus)}/level';
 
   /* ─── Auto-Discovery ─── */
 
   Future<void> _discoverMixer() async {
     setState(() {
       _connStatus = ConnStatus.discovering;
-      _statusMsg  = 'Searching…';
+      _statusMsg = 'Searching…';
     });
 
     try {
@@ -243,14 +263,14 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
       } else {
         setState(() {
           _connStatus = ConnStatus.failed;
-          _statusMsg  = 'Not found – enter IP manually';
+          _statusMsg = 'Mixer not found';
         });
       }
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _connStatus = ConnStatus.failed;
-        _statusMsg  = 'Discovery error';
+        _statusMsg = 'Discovery error';
       });
     }
   }
@@ -260,7 +280,7 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
   Future<void> _connectToMixer() async {
     setState(() {
       _connStatus = ConnStatus.connected;
-      _statusMsg  = _ipController.text.trim();
+      _statusMsg = _ipController.text.trim();
     });
     await _startListening();
     _startKeepAlive();
@@ -272,8 +292,10 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
       _send(_oscStr('/xremotenfb'));
       // Meter subscription lasts ~10 s on X-Air, so renew it every 5 s.
       _send(_oscStrArg('/meters', '/meters/1'));
-      if (DateTime.now().difference(_lastMeterAt) > const Duration(seconds: 3)) {
-        _meters.value = List.filled(_meterCount, _meterFloor); // no data → don't show stale levels
+      if (DateTime.now().difference(_lastMeterAt) >
+          const Duration(seconds: 3)) {
+        _meters.value = List.filled(
+            _meterCount, _meterFloor); // no data → don't show stale levels
       }
     }
 
@@ -284,7 +306,8 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
 
   Future<void> _startListening() async {
     final sock = await _ensureSocket();
-    if (_socketSub != null) return; // a socket stream can only be listened to once
+    if (_socketSub != null)
+      return; // a socket stream can only be listened to once
     _socketSub = sock.listen((RawSocketEvent e) {
       if (e == RawSocketEvent.read) {
         final dg = sock.receive();
@@ -339,7 +362,9 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
       for (final t in tags.substring(1).codeUnits) {
         if (t == 0x66 /* f */ || t == 0x69 /* i */) {
           if (pos + 4 > data.length) break;
-          args.add(t == 0x66 ? bd.getFloat32(pos, Endian.big) : bd.getInt32(pos, Endian.big));
+          args.add(t == 0x66
+              ? bd.getFloat32(pos, Endian.big)
+              : bd.getInt32(pos, Endian.big));
           pos += 4;
         } else if (t == 0x73 /* s */) {
           final s = readStr();
@@ -384,13 +409,13 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
     _meters.value = out;
   }
 
-  static final _reCh        = RegExp(r'^/ch/(\d{2})/(.+)$');
-  static final _reSend      = RegExp(r'^mix/(\d{2})/level$');
-  static final _reBus       = RegExp(r'^/(?:bus/0?(\d)|lr)/(.+)$');
+  static final _reCh = RegExp(r'^/ch/(\d{2})/(.+)$');
+  static final _reSend = RegExp(r'^mix/(\d{2})/level$');
+  static final _reBus = RegExp(r'^/(?:bus/0?(\d)|lr)/(.+)$');
   static final _reMuteGroup = RegExp(r'^/config/mute/(\d)$');
 
   void _updateFromOsc(String path, Object arg) {
-    final v   = arg is num ? arg.toDouble() : null;
+    final v = arg is num ? arg.toDouble() : null;
     final str = arg is String ? arg : null;
 
     final ch = _reCh.firstMatch(path);
@@ -438,7 +463,8 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
     final mg = _reMuteGroup.firstMatch(path);
     if (mg != null && v != null) {
       final g = int.parse(mg.group(1)!) - 1;
-      if (g >= 0 && g < 4) setState(() => _muteGroup[g] = v != 0); // 1 = engaged
+      if (g >= 0 && g < 4)
+        setState(() => _muteGroup[g] = v != 0); // 1 = engaged
     }
   }
 
@@ -511,59 +537,79 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
 
   @override
   Widget build(BuildContext context) {
-    final landscape = MediaQuery.of(context).orientation == Orientation.landscape;
-    final connected = _connStatus == ConnStatus.connected;
+    final landscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
 
     return Scaffold(
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
-          child: Column(
+          padding: EdgeInsets.fromLTRB(
+              12, landscape ? 6 : 4, 12, landscape ? 6 : 10),
+          child: landscape ? _buildLandscape() : _buildPortrait(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPortrait() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildHeader(),
+        const SizedBox(height: 4),
+        _buildMixTabs(),
+        _sectionLabel('Mute groups'),
+        _buildMuteGroups(),
+        _sectionLabel(
+          'Channels',
+          trailing: _selectedMix == MixTarget.lr
+              ? 'Main mix'
+              : 'Sends to ${_mixLabel(_selectedMix)}',
+        ),
+        // Strips take all remaining height → faders grow with the screen.
+        Expanded(child: _buildStrips()),
+        const SizedBox(height: 10),
+        _buildMasterBar(),
+      ],
+    );
+  }
+
+  /// Landscape: everything above the strips collapses into one 38 px bar,
+  /// so the strips get nearly the full screen height.
+  Widget _buildLandscape() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 38,
+          child: Row(children: [
+            _statusDot(),
+            const SizedBox(width: 8),
+            const Text('XR18',
+                style: TextStyle(
+                    color: _textPri,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15)),
+            const SizedBox(width: 12),
+            Expanded(flex: 5, child: _buildMixTabs()),
+            const SizedBox(width: 10),
+            Expanded(flex: 3, child: _buildMuteGroups(compact: true)),
+            const SizedBox(width: 4),
+            _settingsButton(),
+          ]),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildHeader(),
-              if (!connected) ...[
-                const SizedBox(height: 4),
-                _card(_buildConnectionForm()),
-              ],
-              const SizedBox(height: 8),
-              if (landscape)
-                Row(children: [
-                  Expanded(flex: 3, child: _buildMixTabs()),
-                  const SizedBox(width: 10),
-                  Expanded(flex: 2, child: _buildMuteGroups()),
-                ])
-              else ...[
-                _buildMixTabs(),
-                _sectionLabel('Mute groups'),
-                _buildMuteGroups(),
-              ],
-              _sectionLabel(
-                'Channels',
-                trailing: _selectedMix == MixTarget.lr
-                    ? 'Main mix'
-                    : 'Sends to ${_mixLabel(_selectedMix)}',
-              ),
-              Expanded(
-                child: landscape
-                    ? Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(child: _buildStrips()),
-                          const SizedBox(width: 8),
-                          SizedBox(width: 72, child: _buildMasterStrip()),
-                        ],
-                      )
-                    : _buildStrips(),
-              ),
-              if (!landscape) ...[
-                const SizedBox(height: 10),
-                _buildMasterBar(),
-              ],
+              Expanded(child: _buildStrips(compact: true)),
+              const SizedBox(width: 8),
+              SizedBox(width: 72, child: _buildMasterStrip(compact: true)),
             ],
           ),
         ),
-      ),
+      ],
     );
   }
 
@@ -579,54 +625,70 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
     );
   }
 
-  Widget _buildHeader() {
-    Color statusColor;
+  Color get _statusColor {
     switch (_connStatus) {
-      case ConnStatus.discovering: statusColor = _amber;   break;
-      case ConnStatus.connected:   statusColor = _green;   break;
-      case ConnStatus.failed:      statusColor = _red;     break;
-      case ConnStatus.idle:        statusColor = _textSec; break;
+      case ConnStatus.discovering:
+        return _amber;
+      case ConnStatus.connected:
+        return _green;
+      case ConnStatus.failed:
+        return _red;
+      case ConnStatus.idle:
+        return _textSec;
     }
+  }
 
+  Widget _statusDot() {
+    if (_connStatus == ConnStatus.discovering) {
+      return SizedBox(
+        width: 10,
+        height: 10,
+        child: CircularProgressIndicator(strokeWidth: 1.5, color: _statusColor),
+      );
+    }
+    return Container(
+      width: 9,
+      height: 9,
+      decoration: BoxDecoration(color: _statusColor, shape: BoxShape.circle),
+    );
+  }
+
+  Widget _settingsButton() {
+    return IconButton(
+      tooltip: 'Connection settings',
+      visualDensity: VisualDensity.compact,
+      onPressed: _openConnectionSheet,
+      icon: const Icon(Icons.settings, color: _textSec, size: 20),
+    );
+  }
+
+  Widget _buildHeader() {
+    final failed = _connStatus == ConnStatus.failed;
     return Row(
       children: [
-        if (_connStatus == ConnStatus.discovering)
-          SizedBox(
-            width: 10,
-            height: 10,
-            child: CircularProgressIndicator(strokeWidth: 1.5, color: statusColor),
-          )
-        else
-          Container(
-            width: 9,
-            height: 9,
-            decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
-          ),
+        _statusDot(),
         const SizedBox(width: 8),
-        const Text('XR18', style: TextStyle(color: _textPri, fontWeight: FontWeight.bold, fontSize: 16)),
+        const Text('XR18',
+            style: TextStyle(
+                color: _textPri, fontWeight: FontWeight.bold, fontSize: 16)),
         const SizedBox(width: 8),
         Expanded(
-          child: Text(
-            _statusMsg,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: _connStatus == ConnStatus.connected ? _textSec : statusColor,
-              fontSize: 12,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _openConnectionSheet,
+            child: Text(
+              failed ? '$_statusMsg · tap to set IP' : _statusMsg,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: _connStatus == ConnStatus.connected
+                    ? _textSec
+                    : _statusColor,
+                fontSize: 12,
+              ),
             ),
           ),
         ),
-        IconButton(
-          tooltip: 'Find mixer',
-          visualDensity: VisualDensity.compact,
-          onPressed: _connStatus == ConnStatus.discovering ? null : _discoverMixer,
-          icon: const Icon(Icons.search, color: _textSec, size: 20),
-        ),
-        IconButton(
-          tooltip: 'Connection settings',
-          visualDensity: VisualDensity.compact,
-          onPressed: _openConnectionSheet,
-          icon: const Icon(Icons.settings, color: _textSec, size: 20),
-        ),
+        _settingsButton(),
       ],
     );
   }
@@ -699,14 +761,31 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: _surface,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(ctx).viewInsets.bottom),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+            16, 16, 16, 16 + MediaQuery.of(ctx).viewInsets.bottom),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Connection', style: TextStyle(color: _textPri, fontWeight: FontWeight.bold, fontSize: 15)),
+            Row(children: [
+              const Text('Settings',
+                  style: TextStyle(
+                      color: _textPri,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15)),
+              const Spacer(),
+              _statusDot(),
+              const SizedBox(width: 6),
+              Text(
+                _connStatus == ConnStatus.connected
+                    ? 'Connected · $_statusMsg'
+                    : _statusMsg,
+                style: TextStyle(color: _statusColor, fontSize: 12),
+              ),
+            ]),
             const SizedBox(height: 14),
             _buildConnectionForm(onDone: () => Navigator.pop(ctx)),
           ],
@@ -719,7 +798,12 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(2, 12, 2, 6),
       child: Row(children: [
-        Text(text, style: const TextStyle(color: _textSec, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.3)),
+        Text(text,
+            style: const TextStyle(
+                color: _textSec,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.3)),
         const Spacer(),
         if (trailing != null) ...[
           Text(trailing, style: TextStyle(color: _mixAccent, fontSize: 11)),
@@ -750,7 +834,9 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
                 alignment: Alignment.center,
                 padding: const EdgeInsets.symmetric(horizontal: 2),
                 decoration: BoxDecoration(
-                  color: m == _selectedMix ? (m == MixTarget.lr ? _accent : _amber) : Colors.transparent,
+                  color: m == _selectedMix
+                      ? (m == MixTarget.lr ? _accent : _amber)
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
@@ -759,7 +845,8 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: m == _selectedMix ? _bg : _textSec,
-                    fontWeight: m == _selectedMix ? FontWeight.bold : FontWeight.normal,
+                    fontWeight:
+                        m == _selectedMix ? FontWeight.bold : FontWeight.normal,
                     fontSize: 12,
                   ),
                 ),
@@ -770,7 +857,7 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
     );
   }
 
-  Widget _buildMuteGroups() {
+  Widget _buildMuteGroups({bool compact = false}) {
     return Row(children: [
       for (int g = 0; g < 4; g++) ...[
         if (g > 0) const SizedBox(width: 6),
@@ -785,23 +872,36 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
                 height: 38,
+                padding: const EdgeInsets.symmetric(horizontal: 2),
                 decoration: BoxDecoration(
-                  color: _muteGroup[g] ? _red.withValues(alpha: 0.18) : Colors.transparent,
+                  color: _muteGroup[g]
+                      ? _red.withValues(alpha: 0.18)
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: _muteGroup[g] ? _red : _border),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(_muteGroup[g] ? Icons.volume_off : Icons.volume_up,
-                        size: 14, color: _muteGroup[g] ? _red : _textSec),
-                    const SizedBox(width: 4),
-                    Text(
-                      'MG ${g + 1}',
-                      style: TextStyle(
-                        color: _muteGroup[g] ? _red : _textSec,
-                        fontWeight: _muteGroup[g] ? FontWeight.bold : FontWeight.normal,
-                        fontSize: 12,
+                    if (!compact) ...[
+                      Icon(_muteGroup[g] ? Icons.volume_off : Icons.volume_up,
+                          size: 14, color: _muteGroup[g] ? _red : _textSec),
+                      const SizedBox(width: 4),
+                    ],
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          compact ? 'MG${g + 1}' : 'MG ${g + 1}',
+                          maxLines: 1,
+                          style: TextStyle(
+                            color: _muteGroup[g] ? _red : _textSec,
+                            fontWeight: _muteGroup[g]
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            fontSize: 12,
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -814,7 +914,7 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
     ]);
   }
 
-  Widget _buildStrips() {
+  Widget _buildStrips({bool compact = false}) {
     final b = _selectedMix.index;
     return ListView.separated(
       scrollDirection: Axis.horizontal,
@@ -833,14 +933,16 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
           meterIndices: [i],
           onLevel: (v) => _setLevel(i, v),
           onMute: () => _toggleChannelMute(i),
+          compact: compact,
         ),
       ),
     );
   }
 
-  Widget _buildMasterStrip() {
+  Widget _buildMasterStrip({bool compact = false}) {
     final b = _selectedMix.index;
     return _ChannelStrip(
+      compact: compact,
       name: _mixLabel(_selectedMix),
       number: b == 0 ? 'MAIN' : 'BUS $b',
       color: _mixAccent,
@@ -866,12 +968,18 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
             Container(
               width: 4,
               height: 14,
-              decoration: BoxDecoration(color: _mixAccent, borderRadius: BorderRadius.circular(2)),
+              decoration: BoxDecoration(
+                  color: _mixAccent, borderRadius: BorderRadius.circular(2)),
             ),
             const SizedBox(width: 8),
-            Text(_masterTitle, style: const TextStyle(color: _textPri, fontWeight: FontWeight.bold, fontSize: 13)),
+            Text(_masterTitle,
+                style: const TextStyle(
+                    color: _textPri,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13)),
             const Spacer(),
-            Text(formatDb(_busFader[b]), style: _mono.copyWith(color: _textPri, fontSize: 12)),
+            Text(formatDb(_busFader[b]),
+                style: _mono.copyWith(color: _textPri, fontSize: 12)),
           ]),
           const SizedBox(height: 4),
           Row(children: [
@@ -891,7 +999,11 @@ class _XR18ControlPageState extends State<XR18ControlPage> {
             _MuteButton(muted: _busMute[b], onTap: _toggleBusMute),
           ]),
           const SizedBox(height: 6),
-          _Meter(levels: _meters, indices: _masterMeters, axis: Axis.horizontal, thickness: 4),
+          _Meter(
+              levels: _meters,
+              indices: _masterMeters,
+              axis: Axis.horizontal,
+              thickness: 4),
         ],
       ),
     );
@@ -922,8 +1034,11 @@ class _ChannelStrip extends StatelessWidget {
     required this.meterIndices,
     required this.onLevel,
     required this.onMute,
+    this.compact = false,
   });
 
+  /// Landscape: drop the number line and tighten spacing to give the fader more travel.
+  final bool compact;
   final String name;
   final String number;
   final Color color;
@@ -947,7 +1062,7 @@ class _ChannelStrip extends StatelessWidget {
       child: Column(
         children: [
           Container(height: 4, color: color),
-          const SizedBox(height: 6),
+          SizedBox(height: compact ? 4 : 6),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Text(
@@ -955,11 +1070,13 @@ class _ChannelStrip extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: _textPri, fontSize: 11, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                  color: _textPri, fontSize: 11, fontWeight: FontWeight.w600),
             ),
           ),
-          Text(number, style: const TextStyle(color: _textSec, fontSize: 10)),
-          const SizedBox(height: 6),
+          if (!compact)
+            Text(number, style: const TextStyle(color: _textSec, fontSize: 10)),
+          SizedBox(height: compact ? 2 : 6),
           Expanded(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -978,16 +1095,20 @@ class _ChannelStrip extends StatelessWidget {
                 const SizedBox(width: 4),
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 9),
-                  child: _Meter(levels: meters, indices: meterIndices, axis: Axis.vertical),
+                  child: _Meter(
+                      levels: meters,
+                      indices: meterIndices,
+                      axis: Axis.vertical),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 6),
-          Text(formatDb(level), style: _mono.copyWith(color: _textPri, fontSize: 11)),
-          const SizedBox(height: 6),
+          SizedBox(height: compact ? 2 : 6),
+          Text(formatDb(level),
+              style: _mono.copyWith(color: _textPri, fontSize: 11)),
+          SizedBox(height: compact ? 4 : 6),
           _MuteButton(muted: muted, onTap: onMute),
-          const SizedBox(height: 8),
+          SizedBox(height: compact ? 6 : 8),
         ],
       ),
     );
@@ -1030,18 +1151,23 @@ class _FaderState extends State<_Fader> {
   Widget build(BuildContext context) {
     final vertical = widget.axis == Axis.vertical;
     return LayoutBuilder(builder: (context, c) {
-      final travel = math.max(1.0, (vertical ? c.maxHeight : c.maxWidth) - _Fader.capLen);
+      final travel =
+          math.max(1.0, (vertical ? c.maxHeight : c.maxWidth) - _Fader.capLen);
       return Semantics(
         slider: true,
         value: formatDb(widget.value),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onVerticalDragStart:  vertical ? (_) => _dragValue = widget.value : null,
-          onVerticalDragUpdate: vertical ? (d) => _update(-d.delta.dy, travel) : null,
-          onVerticalDragEnd:    vertical ? (_) => _dragValue = null : null,
-          onHorizontalDragStart:  vertical ? null : (_) => _dragValue = widget.value,
-          onHorizontalDragUpdate: vertical ? null : (d) => _update(d.delta.dx, travel),
-          onHorizontalDragEnd:    vertical ? null : (_) => _dragValue = null,
+          onVerticalDragStart:
+              vertical ? (_) => _dragValue = widget.value : null,
+          onVerticalDragUpdate:
+              vertical ? (d) => _update(-d.delta.dy, travel) : null,
+          onVerticalDragEnd: vertical ? (_) => _dragValue = null : null,
+          onHorizontalDragStart:
+              vertical ? null : (_) => _dragValue = widget.value,
+          onHorizontalDragUpdate:
+              vertical ? null : (d) => _update(d.delta.dx, travel),
+          onHorizontalDragEnd: vertical ? null : (_) => _dragValue = null,
           onDoubleTap: () => widget.onChanged(_unity),
           child: CustomPaint(
             size: Size(c.maxWidth, c.maxHeight),
@@ -1059,7 +1185,11 @@ class _FaderState extends State<_Fader> {
 }
 
 class _FaderPainter extends CustomPainter {
-  _FaderPainter({required this.value, required this.vertical, required this.accent, required this.dimmed});
+  _FaderPainter(
+      {required this.value,
+      required this.vertical,
+      required this.accent,
+      required this.dimmed});
 
   final double value;
   final bool vertical;
@@ -1088,15 +1218,18 @@ class _FaderPainter extends CustomPainter {
       canvas.drawLine(at(t, 5), at(t, w), tick);
     }
 
-    RRect bar(double f0, double f1) =>
-        RRect.fromRectAndRadius(Rect.fromPoints(at(f0, -2), at(f1, 2)), const Radius.circular(2));
+    RRect bar(double f0, double f1) => RRect.fromRectAndRadius(
+        Rect.fromPoints(at(f0, -2), at(f1, 2)), const Radius.circular(2));
     canvas.drawRRect(bar(0, 1), Paint()..color = _border);
-    canvas.drawRRect(bar(0, value), Paint()..color = dimmed ? accent.withValues(alpha: 0.25) : accent);
+    canvas.drawRRect(bar(0, value),
+        Paint()..color = dimmed ? accent.withValues(alpha: 0.25) : accent);
 
     final c = at(value, 0);
     final capRect = vertical
-        ? Rect.fromCenter(center: c, width: math.min(size.width - 2, 28), height: cap)
-        : Rect.fromCenter(center: c, width: cap, height: math.min(size.height - 2, 28));
+        ? Rect.fromCenter(
+            center: c, width: math.min(size.width - 2, 28), height: cap)
+        : Rect.fromCenter(
+            center: c, width: cap, height: math.min(size.height - 2, 28));
     canvas.drawRRect(
       RRect.fromRectAndRadius(capRect, const Radius.circular(4)),
       Paint()..color = dimmed ? _textSec : _textPri,
@@ -1105,20 +1238,29 @@ class _FaderPainter extends CustomPainter {
       ..color = _bg
       ..strokeWidth = 2;
     if (vertical) {
-      canvas.drawLine(Offset(capRect.left + 4, c.dy), Offset(capRect.right - 4, c.dy), groove);
+      canvas.drawLine(Offset(capRect.left + 4, c.dy),
+          Offset(capRect.right - 4, c.dy), groove);
     } else {
-      canvas.drawLine(Offset(c.dx, capRect.top + 4), Offset(c.dx, capRect.bottom - 4), groove);
+      canvas.drawLine(Offset(c.dx, capRect.top + 4),
+          Offset(c.dx, capRect.bottom - 4), groove);
     }
   }
 
   @override
   bool shouldRepaint(_FaderPainter old) =>
-      old.value != value || old.accent != accent || old.dimmed != dimmed || old.vertical != vertical;
+      old.value != value ||
+      old.accent != accent ||
+      old.dimmed != dimmed ||
+      old.vertical != vertical;
 }
 
 // ────────── Level meter ──────────
 class _Meter extends StatelessWidget {
-  const _Meter({required this.levels, required this.indices, required this.axis, this.thickness = 5});
+  const _Meter(
+      {required this.levels,
+      required this.indices,
+      required this.axis,
+      this.thickness = 5});
 
   final ValueListenable<List<double>> levels;
   final List<int> indices;
@@ -1184,8 +1326,10 @@ class _MeterPainter extends CustomPainter {
         final b = math.min(_segments[s][1], f);
         if (b <= a) break;
         final r = vertical
-            ? Rect.fromLTRB(lane.left, lane.bottom - b * lane.height, lane.right, lane.bottom - a * lane.height)
-            : Rect.fromLTRB(lane.left + a * lane.width, lane.top, lane.left + b * lane.width, lane.bottom);
+            ? Rect.fromLTRB(lane.left, lane.bottom - b * lane.height,
+                lane.right, lane.bottom - a * lane.height)
+            : Rect.fromLTRB(lane.left + a * lane.width, lane.top,
+                lane.left + b * lane.width, lane.bottom);
         canvas.drawRect(r, Paint()..color = _segColors[s]);
       }
       canvas.restore();
@@ -1224,7 +1368,10 @@ class _MuteButton extends StatelessWidget {
           ),
           child: Text(
             'M',
-            style: TextStyle(color: muted ? _bg : _textSec, fontWeight: FontWeight.w800, fontSize: 13),
+            style: TextStyle(
+                color: muted ? _bg : _textSec,
+                fontWeight: FontWeight.w800,
+                fontSize: 13),
           ),
         ),
       ),
